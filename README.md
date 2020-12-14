@@ -17,6 +17,7 @@ The gdp by state is generated from the dataset from the bea.gov website. The ful
 
 ### project file:
 the final project . rmd and final project . nb.html including data intake, wrangling and visualization for answering the guiding question. 
+link to repo : [finalproject](https://github.com/sedwardshi/finalproject184.git)
 
 thank you!
 
