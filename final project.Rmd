@@ -1,0 +1,175 @@
+---
+title: "STAT 184 project" 
+subtitle: "Wind resources and GDP"
+author: "Ziang Shi"
+output: html_notebook
+---
+### abstract
+Green energy is a key innovation that discovered in the recent years. It will essentially replace the fossil fuel and take a important role in the global energy market. Not only it will reduce the CO2 emission, the green energy can also be created by non- physical matters such as sun light or wind. Wind power is a special energy resource that based on the electricity generation from the wind power plant. It requires strict geographical features to build and electricity generation is hard to examine before implementation. Based on 2018 data resource, United States of America currently has 430 wind power plant that operate. 
+
+### Guiding question 
+1. What is the shape of the distribution of wind power plant looks like? 
+2. Does the number of wind power plant affect the GDP in the local state?
+3. If possible, predict new location of the wind power plant construction？
+
+### data resource
+The table comes from the website https://openei.org/datasets/dataset/miller-keith-2018-windplantdata/resource/3bf6f992-69fc-4ff1-a07f-8f9b97f97571
+and the data source comes from openei.org.
+The data has been collected two scholars Miller and Keith (2018, Environ. Res. Lett. 13 104008), collected in 2018.
+
+The gdp by state is generated from the dataset from the bea.gov website. The full data table contain the gdp by quarters in 2018, comparing with the data in 2017. The data has been collected by the governmental official. 
+ 
+### indices checksheet: 
+-----data access:
+(52-55) .Rmd Line numbers where at least two different data sources are imported
+(59,63) .Rmd Line numbers for inspecting data intake  
+-----data wrangling:
+(69-78,87-91) .Rmd Line number(s) for general data wrangling 
+(80-84) .Rmd Line number(s) for a join operation
+(94-97) .Rmd Line number(s) for use of reduction and/or transformation functions
+(99-102) .Rmd Line number(s) for use of regular expressions
+(104-111) .Rmd Line number(s) for use of machine learning (not "wrangling" but scored here)
+-----data visualization:
+(115-120,136-143) .Rmd Line number(s) for use of multiple different geoms: 
+(146-154) .Rmd Line number(s) for use of layered graphics:  
+(158-160) .Rmd Line number(s) for use of decision tree or dendogram results:   
+## library package
+
+```{r}
+library(tidyverse)
+library(mosaic)
+library(DataComputing)
+```
+```{r}
+library(usmap)
+library(ggplot2)
+library(RColorBrewer)
+library(party)
+```
+
+## data accesss 
+
+```{r}
+windplant <- read.csv(file = "millerkeith2018data1.csv")
+stategdp <- read.csv(file = "stategdp2018q4.csv" )
+```
+
+data inspecting :
+```{r}
+glimpse(windplant)
+```
+
+```{r}
+head(stategdp)
+```
+
+## data wrangling:
+
+In order to begin the analysis, we will group the number of wind power plant by using states 
+```{r}
+windplant$Yaxis = factor(windplant$Yaxis)
+```
+general wrangling, counting number of plant for each state:
+```{r pressure, echo=FALSE}
+Statenp <- 
+  windplant%>%
+  group_by(State)%>%
+  summarise (numberOfplant  = n_distinct(Plant_Code))
+```
+Join function, condition by using state:
+```{r}
+finalset<- 
+  Statenp %>%
+  left_join(stategdp, by= "State")
+```
+
+find southern state data(general wrangling):
+```{r}
+finalsetS<- 
+  finalset%>%
+  filter(State == "Texas"|State == "Kansas"|State == "New Mexico"|State == "Oklahoma")
+```
+
+reduction or transformation function, find summary data of AreaKM2 variable:
+```{r}
+windplant%>%
+  summarise(mean(AreaKM2),max(AreaKM2),min(AreaKM2))
+```
+regular expression, find USWTDB_ID name contain three vowels in a row:
+```{r}
+windplant %>% 
+  filter(grepl("[aeiou]{3,}", USWTDB_ID, ignore.case = TRUE)) 
+```
+creating a decision tree of having a plant install capacity greater than 100, with varible longitude, Y axis and areaKM2
+```{r}
+decisionT <- ctree(InstCapMWi >=100 ~AreaKM2+Longitude+Yaxis, data = windplant)
+```
+creating multi-linear regression model that shows the same feature above with summary
+```{r}
+decisionT2 = lm(InstCapMWi ~ AreaKM2+Longitude+Yaxis, data = windplant)
+summary(decisionT2)
+```
+## data visualization
+The plot shows the relationship between 
+
+```{r}
+finalset %>%
+  ggplot(aes(x= numberOfplant, y = X2018Q4/1000000))+
+  geom_point()+
+  geom_smooth(method = "lm", formula= y~x)+ylab("GDP in million")
+```
+
+For the mid-southern states, Texas has the most number of wind power plant constrcution comparing with New Mexico, Oklahoma, and Kansas. 
+
+
+```{r}
+finalsetS %>%
+  ggplot(aes(x= State, y = numberOfplant))+
+  geom_bar(stat= "identity")
+```
+The graph shows three different features:
+1. Since most majority of the dot are clustered at the middle, it means that most of the power plant are built in the central area of the United States 
+2. Comparing to install capacity, the the northern has average 100 MWI as the line is flat, which means there is no linear relationship for northern part 
+    However, for the southern location, the for each degree of the power plant move to the east, the installed capacity will increase. (positive relationship)
+3. Most of the size of the power plant are below 100 as the dot shows a deep blue color. 
+
+```{r}
+myPalette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
+sc <- scale_colour_gradientn(colours = myPalette(100))
+windplant%>%
+    ggplot(aes(x= Longitude, y= InstCapMWi, color = AreaKM2, fill = Yaxis))+
+    geom_point(size = 2)+
+    geom_smooth(method = "lm")+sc
+```
+The two layer graph shows the density of the Net electricity generating in 2016 with the color based on the northern location or southern location. The Density plot presents a right skew shape. It tells the distribution of the wind power plant based on the characteristic of net generation that the northern part will have relatively more density than the southern ones. 
+
+```{r}
+windplant %>%
+  ggplot(aes(x= NetGENe_2016_MWe, color = Yaxis))+
+  geom_density(alpha = 0.75, color = "gray", fill = "gray")+
+  geom_point(alpha = 0.5, aes(y = 0.005),  
+             position = position_jitter(height = 0.005)) +  
+  xlab("net generation MWi") + 
+  ylab( "Density")
+```
+
+The decision tree graph below is following the data frame of decisionT. It illustrates the possibility of having a wind power plant that have installed capactiy that is greater than 100 MWi: 
+
+```{r}
+plot(decisionT)
+```
+### conclusion:
+1. What is the shape of the distribution of wind power plant looks like? 
+    The distribution of the wind power plant are more clustered at the central area of the united states. More power plant are clustered at the south. The wind     power plant with large size and large value of installed capacity are in north west based on the decision chart. The northern power plants have high           density of net generation close to 10. 
+2. Does the number of wind power plant affect the GDP in the local state?
+    Based on the graph, the number of wind power plant does affect the GDP in the local state. The relationship shows a slight positive relationship between 
+    the number of wind power plant and the GDP . Possibly because the high GDP mean the ability to afford the expense on construction of the wind power plant
+    or the wind power plant helps the local energy market. 
+3. If possible, predict new location of the wind power plant construction？
+    Based on the decision graph, the new location can be determine by the wanting value of installed capacity based on the variable of size, yaxis and
+    longitude. For meeting the creteria, mostlikely that the in north west, the south with size greater than 24.824, the power plant can have highest
+    possibility of install capacity greater than 100 MWi(interpretation of the decision tree graph )
+### next step
+1. gathering more data about the construction and function of the wind power plant for the analysis of the new location. 
+2. Require a suitable data set of geographic data of analyzing wind pattern and power in North america for finding new location for the construction
+3. need to see in depth of the influence of construction of wind power plant to the local economy. 
